@@ -482,7 +482,31 @@ def lista(item):
     data = json_object["html"]
 
     return parse_mixed_results(item,data,(config.get_setting("pordedesortlist")=='true'))
-
+    
+def calidadaudio(audio):
+    return {
+        '5.1': '1',
+        'rip': '2',
+        'line': '3',
+        'screener': '4',
+    }.get(''.join(audio.split()).lower(), '9')
+    
+def calidadvideo(calidad):
+    return {
+        'hdmicro': '1',
+        'hd1080': '2',
+        'hd720': '3',
+        'hdrip': '4',
+        'dvrip': '5',
+        'rip': '6',
+    }.get(''.join(calidad.split()).lower(), '9')
+    
+def ordenservidor(servidor):
+    return {
+        'streamcloud': '0',
+        'allmyvideos': '1',
+    }.get(servidor.lower(), '9')
+    
 def findvideos(item):
     logger.info("pelisalacarta.channels.pordede findvideos")
 
@@ -505,6 +529,15 @@ def findvideos(item):
     patron  = '<a target="_blank" class="a aporteLink(.*?)</a>'
     matches = re.compile(patron,re.DOTALL).findall(data)
     itemlist = []
+    itemsort = []
+    ordenenlaces = 2
+    if config.get_setting("ordenenlaces") != "":
+        ordenenlaces = int(config.get_setting("ordenenlaces"))
+    idioma = config.get_setting("languagefilter")
+    if int(idioma) == 1:
+        idiomav = "spanish"
+    else:
+        idiomav = ""
     
     for match in matches:
         logger.info("match="+match)
@@ -544,7 +577,23 @@ def findvideos(item):
         thumbnail = thumb_servidor
         plot = ""
         if (DEBUG): logger.info("title=["+title+"], url=["+url+"], thumbnail=["+thumbnail+"]")
-        itemlist.append( Item(channel=__channel__, action="play" , title=title , url=url, thumbnail=thumbnail, plot=plot, extra=sesion+"|"+item.url, fulltitle=title))
+        if ordenenlaces > 0:
+            if idioma.lower() == idiomav.lower():
+                idioma = "0"
+            else:
+                idioma = "1"
+            itemsort.append({'action': "play", 'title': title, 'extra': sesion+"|"+item.url, 'url': url, 'thumbnail': thumbnail, 'plot': plot, 'fulltitle': title, 'servidor': ordenservidor(nombre_servidor), 'idioma': idioma, 'calidad': calidadvideo(calidad_video), 'audio': calidadaudio(calidad_audio)})
+        else:
+            itemlist.append( Item(channel=__channel__, action="play" , title=title , url=url, thumbnail=thumbnail, plot=plot, extra=sesion+"|"+item.url, fulltitle=title))
+    if ordenenlaces > 0:
+        if ordenenlaces == 1:
+            itemsort = sorted(itemsort, key=lambda k: (k['idioma'], k['calidad'], k['audio']))
+        elif ordenenlaces == 2:
+            itemsort = sorted(itemsort, key=lambda k: (k['idioma'], k['servidor'], k['calidad'], k['audio']))
+        elif ordenenlaces == 3:
+            itemsort = sorted(itemsort, key=lambda k: (k['servidor'], k['calidad'], k['audio'], k['idioma']))
+        for item in itemsort:
+            itemlist.append( Item(channel=__channel__, action=item['action'] , title=item['title'] , url=item['url'], thumbnail=item['thumbnail'], plot=item['plot'], extra=item['extra'], fulltitle=item['fulltitle']))
 
     return itemlist
 
